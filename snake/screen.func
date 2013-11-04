@@ -1,0 +1,33 @@
+function fn_screen_Init()
+{
+	screen_show "0"
+}
+
+function fn_screen_Flush(~player)
+{
+
+	sp_sc_flow_if number cvar ~player == val "-1"
+	{
+		sp_sv_print_sp_broadcast 43 "" "" "" "" "" "" "" "" "" ""	
+	}
+	else
+	{
+		sp_sv_print_sp_client $~player 43 "" "" "" "" "" "" "" "" "" ""
+	}
+}
+
+function fn_screen_Send(~player)
+{
+	sp_sc_flow_if number cvar screen_show == val "1"
+	{
+		sp_sc_flow_if number cvar ~player == val "-1"
+		{
+			sp_sv_print_sp_broadcast 43 #grid_0 #grid_1 #grid_2 #grid_3 #grid_4 #grid_5 #grid_6 #grid_7 #grid_8 #grid_9	
+		}
+		else
+		{
+			sp_sv_print_sp_client $~player 43 #grid_0 #grid_1 #grid_2 #grid_3 #grid_4 #grid_5 #grid_6 #grid_7 #grid_8 #grid_9
+		}
+	}
+	
+}

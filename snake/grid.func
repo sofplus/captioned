@@ -1,0 +1,52 @@
+// Initialise a grid
+function fn_grid_Init(~x,~y)
+{
+	sp_sc_cvar_copy grid_sizeX ~x
+	sp_sc_cvar_copy grid_sizeY ~y
+	sp_sc_func_exec fn_grid_Clear
+}
+
+function fn_grid_ReadCompare(~x,~y,~type)
+{
+	sp_sc_cvar_substr ~tmp2 grid_$~y $~x 1	
+	sp_sc_flow_if text cvar ~tmp2 == cvar ~type
+	{
+		bool 1
+	}
+	else
+	{
+		bool 0
+	}
+}
+
+
+function fn_grid_Write(~x,~y,~value)
+{
+
+	sp_sc_cvar_copy ~line grid_$~y	
+	sp_sc_cvar_substr ~before ~line 0 $~x
+	add ~x 1
+	set ~tot $grid_sizeX
+	sp_sc_cvar_math_sub ~tot $~x
+	sp_sc_cvar_substr ~after ~line $~x $~tot // from index+1 of length 45-index
+
+	//now append the data to before
+	sp_sc_cvar_append ~before #~value
+
+	//now stitch to it after
+	sp_sc_cvar_append ~before #~after
+
+	//and write him back out to the grid cvars
+	sp_sc_cvar_copy grid_$~y ~before
+
+}
+
+function fn_grid_Clear()
+{
+	set ~i 0
+	sp_sc_flow_while number cvar ~i < val "10"
+	{
+		zero grid_$~i
+		add ~i 1
+	}
+}

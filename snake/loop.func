@@ -1,0 +1,33 @@
+function stop()
+{
+	sp_sc_flow_if number cvar inprogress == val "1"
+	{
+		set run "0"
+	}
+}
+function start()
+{
+	sp_sc_flow_if number cvar inprogress == val "1"
+	{
+		say "please wait for current timer to unload"
+	}
+	else
+	{
+		set run "1"
+		set inprogress "1"
+		sp_sc_func_exec loop
+	}
+}
+function loop()
+{
+	//loop code here	
+
+	sp_sc_flow_if number cvar run == val "1"
+	{
+		sp_sc_timer $speed "sp_sc_func_exec loop"
+	}
+	else
+	{
+		set inprogress "0"
+	}
+}

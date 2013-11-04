@@ -1,0 +1,457 @@
+function fn_snk_Init()
+{
+	//dependencies eg. grid
+	sp_sc_func_load_file snake/screen.func
+	sp_sc_func_exec fn_screen_Init
+	sp_sc_func_load_file snake/grid.func
+	sp_sc_func_exec fn_grid_Init 45 10
+	
+	sp_sc_func_load_file snake/fruit.func
+	
+	zero ret;zero bool	
+	
+	set snk_arenaSizeX "24"
+	set snk_arenaSizeY "10"
+	// Used to stop the tick from creating a new timer
+	set snk_playing "0"
+	// Used for the tick function to communicate that no more timers will be created
+	// So it becomes safe to call the tick function else the ending function won't stop, and there will be 2 instances co-existing
+	// Other possible solution == test local variables linked with each function calljh
+	set snk_inprogress "0"
+	set snk_player "-1"
+
+	sp_sc_func_exec fn_snk_SetArt
+
+	// Snake Chat
+	zero snk_chatBuffer
+	set snk_chatSize 210
+	set snk_chatWidth 21
+	set snk_chatHeight 10
+
+	sp_sc_func_exec fn_snk_InitGame
+}
+
+function fn_snk_ResetVars()
+{
+	set snk_headDir 4 //head direction
+	set snk_tailDir $snk_headDir //tail direction front
+	set snk_length "2"
+	set snk_speed "500" //its really the timer, so shorter is faster
+	set snk_dirBuffer $snk_headDir 
+	set snk_headPosX "20";set snk_headPosY "5"
+	set snk_tailPosX "20";set snk_tailPosY "5"
+	set snk_growth 0
+}
+
+function fn_snk_SetArt()
+{
+	set snk_tailAscii "@"
+	set snk_bodyAscii "@"
+	set snk_canvasAscii "%81";sp_sc_cvar_unescape snk_canvasAscii snk_canvasAscii
+	set snk_fruitAscii "O"
+}
+
+function fn_snk_InitGame()
+{
+	sp_sc_func_exec fn_snk_ResetVars
+	sp_sc_func_exec fn_grid_Clear
+	sp_sc_func_exec fn_snk_FillBackground
+	sp_sc_func_exec fn_grid_Write $snk_headPosX $snk_headPosY $snk_bodyAscii
+	sp_sc_func_exec fruit
+}
+
+
+function .StartGame(~slot)
+{
+	sp_sc_cvar_copy snk_player ~slot
+	sp_sc_flow_if number cvar snk_inprogress == val "1"
+	{
+		say "please wait for current game to unload"
+	}
+	else
+	{
+		set screen_show "1"
+		set snk_playing "1"
+		sp_sc_func_exec fn_snk_InitGame
+		set snk_inprogress "1"
+		sp_sc_func_exec fn_snk_tick
+	}
+	
+}
+function .StopGame(~slot)
+{
+	// Only the guy who is playing power to stop game
+	sp_sc_flow_if number cvar ~slot == cvar snk_player
+	{
+		// Only if a game is in progress
+		sp_sc_flow_if number cvar snk_inprogress == val "1"
+		{
+			sp_sc_func_exec fn_snk_StopGame 0
+		}
+	}
+	
+}
+
+function fn_snk_StopGame(~call)
+{
+	//slight delay to compete with snakeStart
+	sp_sc_flow_if number cvar ~call == val "0"
+	{
+		add ~call 1
+		sset ~dd sp_sc_func_exec fn_snk_StopGame $~call
+		sp_sc_timer 100 #~dd
+	}
+	else
+	{
+		set screen_show "0"
+		set snk_playing "0"
+		sp_sc_func_exec fn_screen_Flush -1
+	}
+	
+}
+
+function fn_snk_FillBackground()
+{
+	set ~i 0
+	sp_sc_flow_while number cvar ~i < cvar snk_arenaSizeY
+	{
+		set ~j 0
+		sp_sc_flow_while number cvar ~j < cvar snk_arenaSizeX
+		{
+			sp_sc_cvar_append grid_$~i #snk_canvasAscii
+			add ~j 1
+		}
+		add ~i 1
+	}
+	set ~i 0
+	sp_sc_flow_while number cvar ~i < cvar grid_sizeY
+	{
+		sp_sc_cvar_sset ~tmp #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii #snk_canvasAscii
+		sp_sc_cvar_append grid_$~i #~tmp
+		
+		add ~i 1
+	}
+}
+
+
+function fn_snk_GetTailDir()
+{
+	sp_sc_cvar_substr snk_tailDir snk_dirBuffer 1 1
+}
+function fn_snk_tick()
+{
+	//include the new head into the dir buffer
+	sp_sc_cvar_append snk_dirBuffer $snk_headDir
+
+	//extend head in head direction && wrap
+	sp_sc_func_exec fn_snk_NewHeadPos
+
+	
+	//GameOver check
+	sp_sc_func_exec fn_grid_ReadCompare $snk_headPosX $snk_headPosY #snk_bodyAscii
+	sp_sc_flow_if number cvar bool == val "1"
+	{
+		say "You lose."
+	}
+	else
+	{
+		
+		sp_sc_flow_if number cvar snk_growth == val "0"
+		{
+			//tail position removed
+			sp_sc_func_exec fn_grid_Write $snk_tailPosX $snk_tailPosY #snk_canvasAscii
+			//get the direction for finding the next tile from old tail
+			sp_sc_func_exec fn_snk_GetTailDir
+			//get the new tail pos
+			sp_sc_func_exec fn_snk_NewTailPos
+
+			//remove the first element from dirbuffer
+			sp_sc_cvar_copy ~tmp snk_length;add ~tmp -1
+			sp_sc_cvar_substr ~tmp snk_dirBuffer 1 $~tmp
+			snk_dirBuffer $~tmp	
+		}
+		else
+		{
+			snk_growth "0"
+		}
+
+		//Fruit -> growth mode
+		sp_sc_func_exec fn_grid_ReadCompare $snk_headPosX $snk_headPosY #snk_fruitAscii
+		sp_sc_flow_if number cvar bool == val "1"
+		{
+			snk_growth 1
+			add snk_length 1
+			add snk_speed -4
+			//Load another fruit
+			sp_sc_func_exec fruit
+		}
+	
+		//Draw the new Head/Body
+		sp_sc_func_exec fn_grid_Write $snk_headPosX $snk_headPosY #snk_bodyAscii
+
+		//sofplus broadcast string package text to clients
+		sp_sc_func_exec fn_screen_Send $snk_player
+
+		sp_sc_flow_if number cvar snk_playing == val "1"
+		{
+			sp_sc_timer $snk_speed "sp_sc_func_exec fn_snk_tick"
+		}
+		else
+		{
+			set snk_inprogress "0"
+		}
+		
+	}
+
+	
+}
+
+function fn_snk_NewHeadPos()
+{
+	sp_sc_cvar_copy ~x-1 snk_arenaSizeX
+	add ~x-1 -1
+	sp_sc_cvar_copy ~y-1 snk_arenaSizeY
+	add ~y-1 -1
+	//down
+	sp_sc_flow_if number cvar snk_headDir == val "1"
+	{
+		add snk_headPosY 1
+	}
+	else
+	{
+		//up
+		sp_sc_flow_if number cvar snk_headDir == val "2"
+		{
+			add snk_headPosY -1
+		}
+		else
+		{
+
+			//left
+			sp_sc_flow_if number cvar snk_headDir == val "3"
+			{
+				add snk_headPosX -1
+			}
+			else
+			{
+				//right
+				sp_sc_flow_if number cvar snk_headDir == val "4"
+				{
+					add snk_headPosX 1
+				}
+			}
+		}
+	}
+	sp_sc_flow_if number cvar snk_headPosX < val "0"
+	{
+		snk_headPosX $~x-1
+	}
+	else
+	{
+		sp_sc_flow_if number cvar snk_headPosX > cvar ~x-1
+		{
+			snk_headPosX 0
+		}
+	}
+	sp_sc_flow_if number cvar snk_headPosY < val "0"
+	{
+		snk_headPosY $~y-1
+	}
+	else
+	{
+		sp_sc_flow_if number cvar snk_headPosY > cvar ~y-1
+		{
+			snk_headPosY 0
+		}
+	}
+}
+
+function fn_snk_NewTailPos()
+{
+	
+	sp_sc_cvar_copy ~x-1 snk_arenaSizeX
+	add ~x-1 -1
+	sp_sc_cvar_copy ~y-1 snk_arenaSizeY
+	add ~y-1 -1
+
+	//down
+	sp_sc_flow_if number cvar snk_tailDir == val "1"
+	{
+		add snk_tailPosY 1
+	}
+	else
+	{
+		//up
+		sp_sc_flow_if number cvar snk_tailDir == val "2"
+		{
+			add snk_tailPosY -1
+		}
+		else
+		{
+
+			//left
+			sp_sc_flow_if number cvar snk_tailDir == val "3"
+			{
+				add snk_tailPosX -1
+			}
+			else
+			{
+				//right
+				sp_sc_flow_if number cvar snk_tailDir == val "4"
+				{
+					add snk_tailPosX 1
+				}
+			}
+		}
+	}
+	sp_sc_flow_if number cvar snk_tailPosX < val "0"
+	{
+		snk_tailPosX $~x-1
+	}
+	else
+	{
+		sp_sc_flow_if number cvar snk_tailPosX > cvar ~x-1
+		{
+			snk_tailPosX 0
+		}
+	}
+	sp_sc_flow_if number cvar snk_tailPosY < val "0"
+	{
+		snk_tailPosY $~y-1
+	}
+	else
+	{
+		sp_sc_flow_if number cvar snk_tailPosY > cvar ~y-1
+		{
+			snk_tailPosY 0
+		}
+	}
+}
+
+function fn_snk_loadfruit()
+{
+	sp_sc_cvar_copy ~x-1 snk_arenaSizeX;add ~x-1 -1
+	sp_sc_cvar_copy ~y-1 snk_arenaSizeY;add ~y-1 -1
+	sp_sc_cvar_random_int ~randy 0 $~y-1
+	sp_sc_cvar_random_int ~randx 0 $~x-1
+	sp_sc_func_exec fn_grid_ReadCompare $~randx $~randy #snk_bodyAscii
+	sp_sc_flow_if number cvar bool == val "1"
+	{
+		sp_sc_func_exec fn_snk_loadfruit
+	}
+	else
+	{
+		sp_sc_flow_if number cvar snk_headPosX == cvar ~randx
+		{
+			sp_sc_flow_if number cvar snk_headPosY == cvar ~randy
+			{
+				sp_sc_func_exec fn_snk_loadfruit
+			}
+			
+		}
+		else
+		{
+			sp_sc_func_exec fn_grid_Write $~randx $~randy #snk_fruitAscii
+		}
+		
+	}
+}
+function .snkup()
+{
+	set snk_headDir "2"
+
+}
+function .snkdown()
+{
+	set snk_headDir "1"
+}
+function .snkright()
+{
+	set snk_headDir "4"
+}
+function .snkleft()
+{
+	set snk_headDir "3"
+}
+function .snklen()
+{
+	add snk_length 1
+	set snk_growth 1
+}
+
+function .snksay(~slot,*)
+{
+	
+	//append all arguments into one cvar
+	set ~count 1
+	sp_sc_flow_while number cvar ~count <= val #~0
+	{
+		sp_sc_cvar_copy ~val ~$~count
+		sp_sc_cvar_append ~msg #~val
+		set ~dd "%81";sp_sc_cvar_unescape ~dd ~dd
+		sp_sc_flow_if number cvar ~count != val #~0
+		{
+			sp_sc_cvar_append ~msg #~dd
+		}
+		add ~count 1
+	}
+	sp_sc_cvar_sset ~final $~slot ": " #~msg
+	//say final is #~final
+	//shift it all down bitch
+	//fetch lines it will take up on screen	
+	sp_sc_cvar_len ~len ~final
+	sp_sc_cvar_math_div ~len 21
+	sp_sc_cvar_math_ceil ~len
+	//say it will take $~len lines on screen
+	//forx=0;x<9-num
+	set ~i 9
+	sp_sc_flow_while number cvar ~i >= val $~len
+	{
+		sp_sc_cvar_copy ~tmp ~i;sp_sc_cvar_math_sub ~tmp $~len
+		sp_sc_func_exec fn_snk_GetChatLine $~tmp
+		//say got line $ret
+		
+		//say $~i to line $~tmp
+		sp_sc_func_exec fn_snk_UpdateChatLine $~i #ret
+		add ~i -1
+	}
+
+	//make the changes
+	//say len is $~len
+	set ~i 0
+	sp_sc_flow_while number cvar ~i < cvar ~len
+	{
+		sp_sc_cvar_copy ~tmp ~i
+		sp_sc_cvar_math_mul ~tmp 21
+		sp_sc_cvar_substr ~line ~final #~tmp 21
+		//say line is #~line
+		sp_sc_func_exec fn_snk_UpdateChatLine #~i #~line
+
+		add ~i 1
+	}
+	
+}
+//takes a chat line and replaces the old one
+function fn_snk_UpdateChatLine(~y,~input)
+{
+	//pad with nbspaces
+	sp_sc_cvar_len ~len ~input
+	sp_sc_cvar_copy ~i ~len
+	sp_sc_flow_while number cvar ~i < val 21
+	{
+		sp_sc_cvar_append ~input #snk_canvasAscii
+
+		add ~i 1
+	}
+	
+	//save the snake-part
+	sp_sc_cvar_substr ~snake grid_$~y 0 $snk_arenaSizeX
+	sp_sc_cvar_append ~snake #~input
+	//say #~tmp
+	sp_sc_cvar_copy grid_$~y ~snake
+}
+
+function fn_snk_GetChatLine(~y)
+{
+	sp_sc_cvar_substr ret grid_$~y $snk_arenaSizeX 21
+}

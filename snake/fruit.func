@@ -1,0 +1,118 @@
+function fruit()
+{
+  say FRUITYUM
+  set ~availableY ""
+  set ~i 0 
+  set ~space " "
+  sp_sc_cvar_nbsp ~space ~space
+  set ~switch 0
+  set ~rowNumberNotYValue 0
+
+  //for all lines
+  sp_sc_flow_while number cvar ~i < val 10
+  {
+    sp_sc_cvar_split ~isAvailable #~space grid_$~i
+    //convert split into count of spaces
+    add ~isAvailable_0 -1
+    sp_sc_flow_if number cvar ~isAvailable_0 > val 0 
+    {
+      //store the total # of spaces for this line for later
+      sp_sc_cvar_sset ~totalSpaces_$~rowNumberNotYValue #~i "," #~isAvailable_0
+      add ~rowNumberNotYValue 1      
+      //if its first time
+      sp_sc_flow_if number cvar ~switch == val 0
+      { 
+        set ~tmp #~i //store line num
+        set ~switch 1 //close gate
+      }
+      else 
+      {
+        sp_sc_cvar_sset ~tmp "\" #~i
+      }
+      //append so we have format x\x\x\x\x
+      sp_sc_cvar_append ~availableY #~tmp
+    }
+    add ~i 1   
+  }
+  sp_sc_cvar_split ~availableY \ ~availableY
+  //~availableY_0 = Number of lines that have a space(s) in them
+  //If 0 spaces are available ~availableY_0 will act as if 1 line has a space on it.
+  //However, ~availableY_1 will have a text val of "" so this check will detect no spaces.
+  sp_sc_flow_if text val #~availableY_1 != val ""
+  {
+    //The total lines with spaces might be '9' but the 1st is listed as 0, so we -1
+    add ~availableY_0 -1
+    sp_sc_cvar_random_int ~randy 0 #~availableY_0
+    //sp_sc_cvar_list ~availableY_0
+    //sp_sc_cvar_list ~randy
+    //~ys_1 = line number
+    //~ys_2 = number of spaces available
+    sp_sc_cvar_split ~ys "," ~totalSpaces_$~randy
+    
+    set ~randy #~ys_1
+    
+    //sp_sc_cvar_list ~ys*
+
+    sp_sc_cvar_copy ~tmp ~availableY_$~randy
+    sp_sc_cvar_copy ~substringme grid_$~ys_1
+    
+    set ~i 0
+    set ~switch 0
+    set ~availableX ""
+    set ~matchedSpaces 0
+
+    sp_sc_flow_while number cvar ~i < val #snk_arenaSizeX
+    {
+      //~randy is our line number. Get the total spaces on that line.
+      sp_sc_cvar_copy ~maxSpaces ~ys_2
+      //Check if we matched all the spaces to save time (when possible)
+      sp_sc_flow_if number cvar ~maxSpaces != val #~matchedSpaces
+      {
+        //continue looping through the line
+        sp_sc_cvar_substr ~checkIfAvailableX ~substringme #~i 1
+        sp_sc_cvar_escape ~testing ~checkIfAvailableX %00-%ff
+        sp_sc_flow_if text cvar ~testing == val "%81"
+        {
+          //We have detected a space, increase the matched number
+          add ~matchedSpaces 1
+          sp_sc_flow_if number cvar ~switch == val 0
+          {
+            //switch is used to append "x" to start instead of "\x"
+            set ~tmp #~i
+            set ~switch 1
+          }
+          else
+          {
+            sp_sc_cvar_sset ~tmp "\" #~i
+          }
+          
+          sp_sc_cvar_append ~availableX #~tmp
+        }
+        add ~i 1
+      }
+      else
+      {
+        //end the loop
+        set ~i 24
+        echo "Stopping loop early"
+      }
+    }
+    sp_sc_cvar_split ~availableX \ ~availableX
+    //sp_sc_cvar_list ~availableX* 
+    sp_sc_cvar_random_int ~randx 1 #~availableX_0
+    //sp_sc_cvar_list ~randx
+    sp_sc_cvar_copy ~randx ~availableX_$~randx
+
+    //sp_sc_cvar_sset ~dbg "DBG: Our chosen X value = " #~randx " Our chosen Y value = " #~randy
+    //echo #~dbg
+    
+    sp_sc_func_exec fn_grid_Write $~randx $~randy #snk_fruitAscii
+  }
+  else
+  {
+    //game over, no more spaces for the food
+    echo "Game over, no available lines"
+  }
+  sp_sc_cvar_list ~totalSpaces_*
+}
+
